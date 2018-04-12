@@ -14,51 +14,136 @@ player.vx = 0
 player.vy = 0
 player.width = 0.6
 player.height = 1.0
-player.dir = 1
-player.bdir = 0
+player.dir = {}
+player.dir.x = 1
+player.dir.y = 0
+player.bdir = {}
+player.bdir.x = 0
+player.bdir.y = 0
+player.spr = 1
 gravity = 0.004
 fx = 0.0005
 
 --power
 powertime = 0.6
-powertimecount = 0
+powertimecount = 0  
 couldpower = true
 powera = 0.005
 powerangle = 1/14
 powering = false
 
+poweringView = {}
+poweringView.value = 1
+poweringView.length = 12
+poweringView.height = 0.5
+poweringView.color = 9
+poweringView.y = 14
+
 --jump
 jumpflag = false
 jumpspeed = 0.12
+--map
+maps = {}
+maps[1] = {}
+maps[1].x = 0
+maps[1].y = 0
+maps[1].w = 16
+maps[1].h = 16
+currentmap = 1
+--camera
+camera = {}
+camera.w = 12
+camera.h = 12
+camera.x = 8
+camera.y = 8
+function loadmapi(i)
+    loadmap(maps[i])
+end
+function loadmap(m)
+    cameraprocess(m)
+    rpos = posmapping({x = 0,y = 0})
+    map(m.x, m.y, rpos.x, rpos.y, m.x + m.w, m.y + m.h)
+
+end
+function doxy(f, pos)
+    rpos = pos
+    rpos.x = f(pos.x)
+    rpos.y = f(pos.y)
+    return rpos
+end
+function cameraprocess(m)
+    if(abs(camera.x - player.x) > camera.w / 2) then
+        camera.x = player.x + sign(camera.x - player.x) * camera.w / 2
+    end
+    if(abs(camera.y - player.y) > camera.h / 2) then
+        camera.y = player.y + sign(camera.y - player.y) * camera.h / 2
+    end
+
+    posmapping = function(pos)
+                    rpos = pos
+                    rpos.x = 8 + pos.x - camera.x
+                    rpos.y = 8 + pos.y - camera.y
+                    return rpos
+    end
+end
 function _draw() 
     cls(0)
-    index = 3 - player.dir
-    if(ifpowering())
-    then
-        index += 1;
+    loadmapi(currentmap)
+    plpos = posmapping(player)
+    spr(player.spr, plpos.x * 8 - 4, plpos.y * 8 - 4)
+    drawpoweringview(poweringView)
+    print(camera.x)
+    print(camera.y)
+end
+function celToPixel(v)
+    return v * 8
+end
+function unpack(table, from, to)
+    from = from or 1
+    to = to or #table
+    if(from > to) then
+        return nil
     end
-    if(player.dir == 0)
-    then
-        index = 3 - sign(player.vx)
-        if(player.vx == 0)
-        then
-            index = 1
+    return table[from], unpack(table, from + 1, to)
+end
+function fnf(f1, n, f2, ...)
+    local args = {...}
+    local k = 0
+    for i,v in pairs(args) do
+        if(k < n) then
+            args[i] = f2(args[i])
+            k += 1
+        else
+            break
         end
     end
-    map(0,0,0,0,16,16)
-    spr(index,player.x * 8 - 4,player.y * 8 - 4)
-    print(player.x)
-    print(player.y)
-    print(jumpflag)
-    print(player.vy)
+    return f1(unpack(args))
+end
+
+function drawpoweringview(v)
+    poweringView.value = powertimecount / powertime
+    fnf(rectfill, 4, celToPixel, 8 - v.length * v.value / 2, v.y - v.height / 2, 8 + v.length * v.value / 2, v.y + v.height / 2, 10)
 end
 function toradian(degree)
     return degree / 180 * 3.14159
 end
 function _update60()
+    inputupdate()
     powerupdate()
     playerupdate()
+    viewupdate()
     
+end
+function viewupdate()
+    if(player.bdir.x == 0 and player.bdir.y == 1 and ifpowering())
+    then
+        player.spr = 1
+    else
+        player.spr = 3 - player.dir.x
+        if(ifpowering()) then
+            player.spr += 1
+        end
+    end
 end
 function powerbutton()
     return btn(0) or btn(1) or btn(2)
@@ -68,12 +153,7 @@ function powerupdate()
     then
         powering = true
         powertimecount -= 1 / 60
-        if(not btn(0) and not btn(1) and btn(2))
-        then
-            powerup(0,1)
-        else
-            powerup(player.dir,1)
-        end
+        powerup(player.bdir)
     else
         powering = false
     end
@@ -81,22 +161,30 @@ end
 function ifpowering()
     return powering
 end
-function powerup(x,y)
-    player.vx += x * powera * cos(powerangle)
-    player.vy += y * powera * sin(powerangle)
+function powerup(dir)
+    player.vx += dir.x * powera * cos(powerangle)
+    player.vy += dir.y * powera * sin(powerangle)
 end
-function playerupdate()
-    player.bdir = 0
+function inputupdate()
+    player.bdir.x = 0
     if(btn(0))
     then
-        player.dir = -1
-        player.bdir -= 1
+        player.dir.x = -1
+        player.bdir.x -= 1
     end
     if(btn(1))
     then
-        player.dir = 1
-        player.bdir += 1
+        player.dir.x = 1
+        player.bdir.x += 1
     end
+    if(btn(2))
+    then
+        player.bdir.y = 1
+    else
+        player.bdir.y = 0
+    end
+end
+function playerupdate()
     player.vy += gravity
     player.vx += fx * sign(player.vx) * -1
     if(abs(player.vx) <= fx)
@@ -141,7 +229,7 @@ function stepbyv()
     if(solidbothy(sign(player.vx), 0))
     then
         player.x = lx
-        player.vx = 0
+        player.vx = -player.vx * 0.25
     end
     player.y = player.y + player.vy
     if(solidbothx(sign(player.vy), 0))
@@ -179,20 +267,20 @@ end
 function solidbothy(xsign, flag)
     return solid(xsign,1,flag) or solid(xsign,-1,flag)
 end
-function soliddelta(xsign, deltaX, ysign, deltaY, flag)
-    return fmget(player.x + player.width / 2 * xsign + xsign * deltaX, player.y + player.height / 2 * ysign + ysign * deltaY, flag) , fmget(player.x + player.width / 2 * xsign - xsign * deltaX, player.y + player.height / 2 * ysign - ysign * deltaY, flag)
+function soliddelta(xsign, deltax, ysign, deltay, flag)
+    return fmget(player.x + player.width / 2 * xsign + xsign * deltax, player.y + player.height / 2 * ysign + ysign * deltay, flag) , fmget(player.x + player.width / 2 * xsign - xsign * deltax, player.y + player.height / 2 * ysign - ysign * deltay, flag)
 end
-function soliddeltabothy(xsign, deltaX, flag)
-    r1,r2 = soliddelta(xsign,deltaX,-1,0,flag)
-    r3,r4 = soliddelta(xsign,deltaX,1,0,flag)
+function soliddeltabothy(xsign, deltax, flag)
+    r1,r2 = soliddelta(xsign,deltax,-1,0,flag)
+    r3,r4 = soliddelta(xsign,deltax,1,0,flag)
     return r1 or r3 , r2 or r4
 end
-function soliddeltabothx(ysign, deltaY, flag)
-    r1,r2 = soliddelta(-1,0,ysign,deltaY,flag)
-    r3,r4 = soliddelta(1,0,ysign,deltaY,flag)
+function soliddeltabothx(ysign, deltay, flag)
+    r1,r2 = soliddelta(-1,0,ysign,deltay,flag)
+    r3,r4 = soliddelta(1,0,ysign,deltay,flag)
     return r1 or r3 , r2 or r4
 end
-function downFeetPlatform(delta)
+function downfeetplatform(delta)
     return fget(mget(player.x + player.width / 2, player.y + player.height / 2 - delta ))
 end
 function sign(num)
@@ -210,11 +298,11 @@ end
 __gfx__
 00000000000770000000770000007700007700000077000044944444676767670000000000000000000000000000000000000000000000000000000000000000
 00000000006116000007617000076170071670000716700044444494767676760000000000000000000000000000000000000000000000000000000000000000
-00000000006156000007617000076170075670000756700049444449000000000000000000000000000000000000000000000000000000000000000000000000
-000000000076670000257700a825770000775e0000775e8a44944944000000000000000000000000000000000000000000000000000000000000000000000000
+00000000096156900007617000076170075670000756700049444449000000000000000000000000000000000000000000000000000000000000000000000000
+000000000876678000257700a825770000775e0000775e8a44944944000000000000000000000000000000000000000000000000000000000000000000000000
 0000000006d77d6000e57d00a9e57d0000d7520000d7529a44444494000000000000000000000000000000000000000000000000000000000000000000000000
 0000000006d66d6000e57d00a9e57d0000d7520000d7529a94444944000000000000000000000000000000000000000000000000000000000000000000000000
-00000000006776000000660000006600006600000066000044944494000000000000000000000000000000000000000000000000000000000000000000000000
+000000000a6776a00000660000006600006600000066000044944494000000000000000000000000000000000000000000000000000000000000000000000000
 00000000006006000000660000006600006600000066000094444444000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000000000000000000000000000e5000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
